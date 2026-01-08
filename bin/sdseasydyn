@@ -2,34 +2,11 @@
 use strict;
 use warnings;
 
-use Getopt::Long qw(:config bundling no_ignore_case);
+use FindBin ();
+use lib "$FindBin::Bin/../lib";
+
+use Getopt::Long qw(GetOptionsFromArray);
 use EasyDNS::DDNS;
-
-my $help    = 0;
-my $version = 0;
-
-GetOptions(
-    'help|h'    => \$help,
-    'version|V' => \$version,
-) or _usage(2);
-
-if ($version) {
-    print "sdseasydyn 0.001\n";
-    exit 0;
-}
-
-if ($help || !@ARGV) {
-    _usage(0);
-}
-
-my $cmd = shift @ARGV;
-if ($cmd eq 'update') {
-    print "Not implemented yet (scaffold step).\n";
-    exit 2;
-}
-
-print STDERR "Unknown command: $cmd\n";
-_usage(2);
 
 sub _usage {
     my ($code) = @_;
@@ -37,17 +14,129 @@ sub _usage {
 sdseasydyn - EasyDNS Dynamic DNS updater
 
 Usage:
-  sdseasydyn update [options]
-  sdseasydyn --help
-  sdseasydyn --version
+  sdseasydyn [global options] <command> [command options]
 
 Commands:
-  update   Update one or more hostnames (to be implemented)
+  update   Update one or more hostnames
+
+Global options:
+  -h, --help
+  -V, --version
+  -v, --verbose
+
+Update options:
+  -H, --host HOSTNAME        Repeatable. Hostname(s) to update.
+  -c, --config PATH          Config file path (default: ~/.config/sdseasydyn/config.ini)
+      --ip IP                Override detected public IP (later steps)
+      --ip-url URL           Public IP discovery URL (later steps)
+      --timeout SECONDS      HTTP timeout (later steps)
+      --dry-run              Resolve config and exit successfully
+  -v, --verbose              Repeat to increase verbosity (e.g. -vv)
+
+Environment:
+  SDS_EASYDYN_CONFIG          Default config path override
+  EASYDNS_USER                EasyDNS username
+  EASYDNS_TOKEN               EasyDNS dynamic token/password
 
 Exit codes:
   0 success
   2 usage/config error
+
 USAGE
     exit $code;
 }
+
+sub _version {
+    print "sdseasydyn 0.001\n";
+    exit 0;
+}
+
+# --- Parse globals (stop at first non-option / command) ---
+my @argv = @ARGV;
+
+# Ensure global options parsing stops at the first non-option (the command)
+Getopt::Long::Configure(qw(require_order no_ignore_case bundling));
+
+my $help    = 0;
+my $version = 0;
+my $verbose = 0;
+
+GetOptionsFromArray(
+    \@argv,
+    'help|h'    => \$help,
+    'version|V' => \$version,
+    'verbose|v+' => \$verbose,
+) or _usage(2);
+
+_version() if $version;
+_usage(0)  if $help;
+
+my $cmd = shift(@argv) // '';
+_usage(0) if $cmd eq '';
+
+if ($cmd eq 'update') {
+    my @hosts;
+    my $config_path = $ENV{SDS_EASYDYN_CONFIG} // '';
+    my $ip          = '';
+    my $ip_url      = '';
+    my $timeout     = 0;
+    my $dry_run     = 0;
+
+    # Now parse update options from the remaining args only
+    Getopt::Long::Configure(qw(no_ignore_case bundling));
+    GetOptionsFromArray(
+        \@argv,
+        'host|H=s@'   => \@hosts,
+        'config|c=s'  => \$config_path,
+        'ip=s'        => \$ip,
+        'ip-url=s'    => \$ip_url,
+        'timeout=i'   => \$timeout,
+        'dry-run'     => \$dry_run,
+        'verbose|v+'  => \$verbose,
+    ) or _usage(2);
+
+    # If there are leftover args, treat as usage error (predictable CLI)
+    if (@argv) {
+        print STDERR "Unexpected arguments: @argv\n";
+        _usage(2);
+    }
+
+    my $ddns = EasyDNS::DDNS->new(verbose => $verbose);
+
+    my $res = $ddns->cmd_update(
+        hosts       => \@hosts,
+        config_path => $config_path,
+        ip          => $ip,
+        ip_url      => $ip_url,
+        timeout     => $timeout,
+        dry_run     => $dry_run,
+    );
+
+    if (!$res->{ok}) {
+        print STDERR $res->{error} . "\n";
+        exit($res->{exit_code} // 2);
+    }
+
+    if ($verbose) {
+        print STDERR "Resolved configuration:\n";
+        for my $k (sort keys %{ $res->{resolved} }) {
+            my $v = $res->{resolved}{$k};
+            if (ref $v eq 'ARRAY') {
+                $v = join(", ", @$v);
+            }
+            print STDERR "  $k = $v\n";
+        }
+    }
+
+    if ($dry_run) {
+        print "Dry-run: configuration resolved (no network calls in this step).\n";
+        exit 0;
+    }
+
+    print "Not implemented yet: network update will be added in Step 5.\n";
+    exit 2;
+}
+
+print STDERR "Unknown command: $cmd\n";
+_usage(2);
 

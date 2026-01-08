@@ -5,9 +5,48 @@ use warnings;
 
 our $VERSION = '0.001';
 
+use EasyDNS::DDNS::Config ();
+
 sub new {
     my ($class, %args) = @_;
-    return bless { %args }, $class;
+    return bless {
+        verbose => $args{verbose} // 0,
+    }, $class;
+}
+
+sub cmd_update {
+    my ($self, %args) = @_;
+
+    my $cfg = EasyDNS::DDNS::Config->load(
+        config_path => $args{config_path},
+        env         => \%ENV,
+        cli         => {
+            hosts   => $args{hosts},
+            ip      => $args{ip},
+            ip_url  => $args{ip_url},
+            timeout => $args{timeout},
+        },
+    );
+
+    if (!$cfg->{ok}) {
+        return $cfg;
+    }
+
+    # Validate minimal v1 inputs (hosts can come from config or CLI)
+    my $hosts = $cfg->{resolved}{hosts} || [];
+    if (!@$hosts) {
+        return {
+            ok        => 0,
+            exit_code => 2,
+            error     => "No hostnames provided. Use --host or set [update] hosts in config.",
+        };
+    }
+
+    # Step 3 ends here: we only resolve config and validate inputs.
+    return {
+        ok       => 1,
+        resolved => $cfg->{resolved},
+    };
 }
 
 1;
@@ -19,12 +58,6 @@ __END__
 =head1 NAME
 
 EasyDNS::DDNS - EasyDNS Dynamic DNS updater (library)
-
-=head1 SYNOPSIS
-
-  use EasyDNS::DDNS;
-
-  my $ddns = EasyDNS::DDNS->new;
 
 =head1 DESCRIPTION
 
