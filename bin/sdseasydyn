@@ -28,10 +28,10 @@ Update options:
   -H, --host HOSTNAME        Repeatable. Hostname(s) to update.
   -c, --config PATH          Config file path (default: ~/.config/sdseasydyn/config.ini)
       --state PATH           State file path (default: ~/.local/state/sdseasydyn/last_ip)
-      --ip IP                Override detected public IP (later steps)
-      --ip-url URL           Public IP discovery URL (later steps)
-      --timeout SECONDS      HTTP timeout (later steps)
-      --dry-run              Resolve config and exit successfully
+      --ip IP                Override detected public IP (for safe testing)
+      --ip-url URL           Public IP discovery URL (default: https://api.ipify.org)
+      --timeout SECONDS      HTTP timeout (default: 10)
+      --dry-run              Resolve config, compare state, and report intended action
   -v, --verbose              Repeat to increase verbosity (e.g. -vv)
 
 Environment:
@@ -43,6 +43,9 @@ Environment:
 Exit codes:
   0 success
   2 usage/config error
+  3 auth/permission failure
+  4 transient failure (network/IP discovery)
+  5 provider/policy failure (TOOSOON, NOSERVICE, ILLEGAL, unknown)
 
 USAGE
     exit $code;
@@ -119,23 +122,13 @@ if ($cmd eq 'update') {
     }
 
     if ($verbose) {
-        print STDERR "Resolved configuration:\n";
-        for my $k (sort keys %{ $res->{resolved} }) {
-            my $v = $res->{resolved}{$k};
-            if (ref $v eq 'ARRAY') {
-                $v = join(", ", @$v);
-            }
-            print STDERR "  $k = $v\n";
-        }
+        print STDERR $res->{message} . "\n" if $res->{message};
+        print STDERR "current_ip=$res->{current_ip}\n" if $res->{current_ip};
+    } else {
+        print $res->{message} . "\n" if $res->{message};
     }
 
-    if ($dry_run) {
-        print "Dry-run: configuration resolved (no network calls in this step).\n";
-        exit 0;
-    }
-
-    print "Not implemented yet: network update will be added in Step 5.\n";
-    exit 2;
+    exit($res->{exit_code} // 0);
 }
 
 print STDERR "Unknown command: $cmd\n";

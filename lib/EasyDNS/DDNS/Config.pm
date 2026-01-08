@@ -80,8 +80,7 @@ sub load {
     my $def_state_path = _default_state_path();
 
     # Precedence: CLI > ENV > config > defaults
-    my $username = $env_user  || $cfg_user;
-    my $token    = $env_token || $cfg_token;
+    my $username = $env_user || $cfg_user;
 
     my @hosts = @hosts_from_cli ? @hosts_from_cli : @hosts_from_cfg;
 
@@ -98,10 +97,13 @@ sub load {
     my $state_path = $cli_state || $env_state || $cfg_state_path || $def_state_path;
     $state_path = _expand_tilde($state_path);
 
+    # Secret token (do not expose in resolved)
+    my $token = $env_token || $cfg_token;
+
     my $resolved = {
         config_path => $cfg_path,
         username    => $username,
-        token_set   => ($token ? 1 : 0),   # never expose token
+        token_set   => ($token ? 1 : 0),
         hosts       => \@hosts,
         ip          => $cli_ip,
         ip_url      => $ip_url,
@@ -109,7 +111,11 @@ sub load {
         state_path  => $state_path,
     };
 
-    return { ok => 1, resolved => $resolved };
+    return {
+        ok      => 1,
+        resolved => $resolved,
+        secrets  => { token => $token },
+    };
 }
 
 sub _default_config_path {
@@ -163,9 +169,8 @@ Loads configuration from (in precedence order):
 
   CLI > ENV > config file > defaults
 
-Config file format is INI (Config::Tiny).
-
-New in Step 4: state_path, used to store last-known IP.
+Secrets (token) are returned separately under C<secrets> and are never included
+in the resolved hash for logging safety.
 
 =cut
 
