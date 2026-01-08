@@ -1,54 +1,68 @@
 # sdseasydyn
 
-A small, cron-friendly EasyDNS Dynamic DNS updater.
+`sdseasydyn` is a small, CLI-first Dynamic DNS updater for the
+[EasyDNS](https://www.easydns.com/) service.
 
-## Highlights
+It is designed to be safe for cron usage, avoid unnecessary updates,
+and behave predictably under transient network conditions.
 
-- Updates one or more EasyDNS dynamic hostnames to your current public IP
-- **Does nothing if IP did not change** (reduces API calls / avoids TOOSOON noise)
-- Cron-friendly: predictable output and exit codes
-- Retries transient HTTP failures using `Retry::Policy`
+The project is implemented in modern Perl and is distributed on CPAN
+as `App::sdseasydyn`.
 
-## Requirements
+---
 
-- Perl 5.30+
-- `cpanm` recommended
+## Features
 
-## Install (from source)
+- Simple CLI interface (`sdseasydyn update`)
+- Clear configuration precedence: CLI > environment > config file > defaults
+- Secure handling of credentials (tokens are never logged)
+- Public IPv4 discovery with configurable endpoint
+- Local state file to avoid redundant updates
+- Bounded retry logic using `Retry::Policy`
+- Suitable for unattended / scheduled execution
 
-```bash
-cpanm --installdeps .
-perl Makefile.PL
-make test
-```
+---
 
-Run:
+## Quick start
 
-```bash
-perl -Ilib bin/sdseasydyn --help
-```
+sdseasydyn update --host example.easydns.net
 
-## Configuration
+Credentials are provided via environment variables:
 
-Config file format is INI.
+export EASYDNS_USER=your_username
+export EASYDNS_TOKEN=your_token
 
-* Example: `examples/config.ini`
-* Common location: `~/.config/sdseasydyn/config.ini`
+See `docs/EASYDNS.md` and `docs/HOWTO.md` for full configuration details.
 
-Recommended: keep secrets in environment variables and reference them from config:
+---
 
-```ini
-[easydns]
-username = ${EASYDNS_USER}
-token    = ${EASYDNS_TOKEN}
-```
+## Relationship to EasyDNS
 
-## Usage
+This project is an independent, community-maintained tool and is not
+affiliated with, endorsed by, or officially supported by EasyDNS
+Technologies.
 
-See the operational guide:
+It uses the publicly documented EasyDNS Dynamic DNS update endpoint and
+is provided as-is under the terms of its open-source license.
 
-* `docs/HOWTO.md`
+---
+
+## Documentation
+
+- `docs/EASYDNS.md` — EasyDNS-specific behavior and notes
+- `docs/HOWTO.md` — usage and configuration guide
+- `SECURITY.md` — security considerations
+
+---
 
 ## License
 
-LGPL-2.1
+This project is licensed under the GNU Lesser General Public License
+version 2.1 (LGPL-2.1). See the `LICENSE` file for details.
+
+---
+
+## Author
+
+Sergio de Sousa  
+<sergio@serso.com>
