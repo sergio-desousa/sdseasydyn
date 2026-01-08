@@ -1,0 +1,5 @@
+Revision history for sdseasydyn
+
+0.001  2026-01-07
+  - Scaffold project layout (library + CLI + tests)
+
