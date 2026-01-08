@@ -6,7 +6,9 @@ use FindBin ();
 use lib "$FindBin::Bin/../lib";
 
 use Getopt::Long qw(GetOptionsFromArray);
-use EasyDNS::DDNS;
+
+use App::sdseasydyn ();
+use EasyDNS::DDNS ();
 
 sub _usage {
     my ($code) = @_;
@@ -52,7 +54,8 @@ USAGE
 }
 
 sub _version {
-    print "sdseasydyn 0.1.0\n";
+    my $ver = $App::sdseasydyn::VERSION // '0.0.0';
+    print "sdseasydyn $ver\n";
     exit 0;
 }
 
