@@ -21,10 +21,11 @@ sub cmd_update {
         config_path => $args{config_path},
         env         => \%ENV,
         cli         => {
-            hosts   => $args{hosts},
-            ip      => $args{ip},
-            ip_url  => $args{ip_url},
-            timeout => $args{timeout},
+            hosts      => $args{hosts},
+            state_path => $args{state_path},
+            ip         => $args{ip},
+            ip_url     => $args{ip_url},
+            timeout    => $args{timeout},
         },
     );
 
@@ -32,7 +33,6 @@ sub cmd_update {
         return $cfg;
     }
 
-    # Validate minimal v1 inputs (hosts can come from config or CLI)
     my $hosts = $cfg->{resolved}{hosts} || [];
     if (!@$hosts) {
         return {
@@ -42,7 +42,7 @@ sub cmd_update {
         };
     }
 
-    # Step 3 ends here: we only resolve config and validate inputs.
+    # Step 4 ends here: plumbing only (HTTP/State will be exercised via tests).
     return {
         ok       => 1,
         resolved => $cfg->{resolved},

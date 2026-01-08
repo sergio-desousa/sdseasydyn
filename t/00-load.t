@@ -21,6 +21,8 @@ sub module_loads {
 module_loads('EasyDNS::DDNS');
 module_loads('EasyDNS::DDNS::Config');
 module_loads('EasyDNS::DDNS::HTTP');
+module_loads('EasyDNS::DDNS::State');
+module_loads('EasyDNS::DDNS::Util');
 
 done_testing;
 

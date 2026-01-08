@@ -5,8 +5,9 @@ use warnings;
 
 use Config::Tiny;
 use File::Spec ();
-use File::Basename ();
 use Cwd ();
+
+use EasyDNS::DDNS::Util ();
 
 sub load {
     my ($class, %args) = @_;
@@ -14,48 +15,50 @@ sub load {
     my $env = $args{env} || {};
     my $cli = $args{cli} || {};
 
-    my $default_path = _default_config_path();
-    my $path = $args{config_path};
-    $path = $default_path if !defined($path) || $path eq '';
-
-    $path = _expand_tilde($path);
+    my $default_cfg_path = _default_config_path();
+    my $cfg_path = $args{config_path};
+    $cfg_path = $default_cfg_path if !defined($cfg_path) || $cfg_path eq '';
+    $cfg_path = _expand_tilde($cfg_path);
 
     my $ini = {};
-    if (-f $path) {
-        my $ct = Config::Tiny->read($path);
+    if (-f $cfg_path) {
+        my $ct = Config::Tiny->read($cfg_path);
         if (!$ct) {
             return {
                 ok        => 0,
                 exit_code => 2,
-                error     => "Failed to read config '$path': " . Config::Tiny->errstr,
+                error     => "Failed to read config '$cfg_path': " . Config::Tiny->errstr,
             };
         }
         $ini = $ct;
     }
 
-    # Extract config values
-    my $cfg_user   = _trim($ini->{easydns}{username} // '');
-    my $cfg_token  = _trim($ini->{easydns}{token}    // '');
+    # --- Config values ---
+    my $cfg_user   = EasyDNS::DDNS::Util::trim($ini->{easydns}{username} // '');
+    my $cfg_token  = EasyDNS::DDNS::Util::trim($ini->{easydns}{token}    // '');
 
-    my $cfg_hosts  = _trim($ini->{update}{hosts}     // '');
-    my $cfg_ip_url = _trim($ini->{update}{ip_url}    // '');
-    my $cfg_timeout= _trim($ini->{update}{timeout}   // '');
+    my $cfg_hosts  = EasyDNS::DDNS::Util::trim($ini->{update}{hosts}     // '');
+    my $cfg_ip_url = EasyDNS::DDNS::Util::trim($ini->{update}{ip_url}    // '');
+    my $cfg_timeout= EasyDNS::DDNS::Util::trim($ini->{update}{timeout}   // '');
+
+    my $cfg_state_path = EasyDNS::DDNS::Util::trim($ini->{state}{path}   // '');
 
     # Allow ${ENVVAR} expansion in config values
-    $cfg_user   = _expand_env($cfg_user,  $env);
-    $cfg_token  = _expand_env($cfg_token, $env);
-    $cfg_ip_url = _expand_env($cfg_ip_url,$env);
+    $cfg_user       = _expand_env($cfg_user, $env);
+    $cfg_token      = _expand_env($cfg_token, $env);
+    $cfg_ip_url     = _expand_env($cfg_ip_url, $env);
+    $cfg_state_path = _expand_env($cfg_state_path, $env);
 
     my @hosts_from_cfg = _split_hosts($cfg_hosts);
 
-    # ENV values
-    my $env_user  = _trim($env->{EASYDNS_USER}  // '');
-    my $env_token = _trim($env->{EASYDNS_TOKEN} // '');
+    # --- ENV values ---
+    my $env_user   = EasyDNS::DDNS::Util::trim($env->{EASYDNS_USER}  // '');
+    my $env_token  = EasyDNS::DDNS::Util::trim($env->{EASYDNS_TOKEN} // '');
+    my $env_state  = EasyDNS::DDNS::Util::trim($env->{SDS_EASYDYN_STATE} // '');
 
-    # CLI values
+    # --- CLI values ---
     my @hosts_from_cli = ();
     if ($cli->{hosts} && ref($cli->{hosts}) eq 'ARRAY') {
-        # Getopt may deliver array-of-arrays if invoked oddly; normalize
         for my $h (@{ $cli->{hosts} }) {
             if (ref $h eq 'ARRAY') {
                 push @hosts_from_cli, @$h;
@@ -66,13 +69,15 @@ sub load {
         @hosts_from_cli = grep { defined($_) && $_ ne '' } @hosts_from_cli;
     }
 
-    my $cli_ip      = _trim($cli->{ip}      // '');
-    my $cli_ip_url  = _trim($cli->{ip_url}  // '');
+    my $cli_ip      = EasyDNS::DDNS::Util::trim($cli->{ip}      // '');
+    my $cli_ip_url  = EasyDNS::DDNS::Util::trim($cli->{ip_url}  // '');
     my $cli_timeout = $cli->{timeout};
+    my $cli_state   = EasyDNS::DDNS::Util::trim($cli->{state_path} // '');
 
-    # Defaults
-    my $def_ip_url  = 'https://api.ipify.org';
-    my $def_timeout = 10;
+    # --- Defaults ---
+    my $def_ip_url     = 'https://api.ipify.org';
+    my $def_timeout    = 10;
+    my $def_state_path = _default_state_path();
 
     # Precedence: CLI > ENV > config > defaults
     my $username = $env_user  || $cfg_user;
@@ -90,14 +95,18 @@ sub load {
         $timeout = int($cli_timeout);
     }
 
+    my $state_path = $cli_state || $env_state || $cfg_state_path || $def_state_path;
+    $state_path = _expand_tilde($state_path);
+
     my $resolved = {
-        config_path => $path,
+        config_path => $cfg_path,
         username    => $username,
-        token_set   => ($token ? 1 : 0),   # do not expose token
+        token_set   => ($token ? 1 : 0),   # never expose token
         hosts       => \@hosts,
         ip          => $cli_ip,
         ip_url      => $ip_url,
         timeout     => $timeout,
+        state_path  => $state_path,
     };
 
     return { ok => 1, resolved => $resolved };
@@ -106,6 +115,11 @@ sub load {
 sub _default_config_path {
     my $home = $ENV{HOME} || Cwd::getcwd();
     return File::Spec->catfile($home, '.config', 'sdseasydyn', 'config.ini');
+}
+
+sub _default_state_path {
+    my $home = $ENV{HOME} || Cwd::getcwd();
+    return File::Spec->catfile($home, '.local', 'state', 'sdseasydyn', 'last_ip');
 }
 
 sub _expand_tilde {
@@ -128,17 +142,9 @@ sub _split_hosts {
     my ($s) = @_;
     return () if !defined($s) || $s eq '';
     my @h = split /\s*,\s*/, $s;
-    @h = map { _trim($_) } @h;
+    @h = map { EasyDNS::DDNS::Util::trim($_) } @h;
     @h = grep { $_ ne '' } @h;
     return @h;
-}
-
-sub _trim {
-    my ($s) = @_;
-    return '' if !defined $s;
-    $s =~ s/^\s+//;
-    $s =~ s/\s+$//;
-    return $s;
 }
 
 1;
@@ -158,6 +164,8 @@ Loads configuration from (in precedence order):
   CLI > ENV > config file > defaults
 
 Config file format is INI (Config::Tiny).
+
+New in Step 4: state_path, used to store last-known IP.
 
 =cut
 

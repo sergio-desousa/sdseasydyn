@@ -27,6 +27,7 @@ Global options:
 Update options:
   -H, --host HOSTNAME        Repeatable. Hostname(s) to update.
   -c, --config PATH          Config file path (default: ~/.config/sdseasydyn/config.ini)
+      --state PATH           State file path (default: ~/.local/state/sdseasydyn/last_ip)
       --ip IP                Override detected public IP (later steps)
       --ip-url URL           Public IP discovery URL (later steps)
       --timeout SECONDS      HTTP timeout (later steps)
@@ -35,6 +36,7 @@ Update options:
 
 Environment:
   SDS_EASYDYN_CONFIG          Default config path override
+  SDS_EASYDYN_STATE           Default state path override
   EASYDNS_USER                EasyDNS username
   EASYDNS_TOKEN               EasyDNS dynamic token/password
 
@@ -51,10 +53,8 @@ sub _version {
     exit 0;
 }
 
-# --- Parse globals (stop at first non-option / command) ---
 my @argv = @ARGV;
 
-# Ensure global options parsing stops at the first non-option (the command)
 Getopt::Long::Configure(qw(require_order no_ignore_case bundling));
 
 my $help    = 0;
@@ -63,8 +63,8 @@ my $verbose = 0;
 
 GetOptionsFromArray(
     \@argv,
-    'help|h'    => \$help,
-    'version|V' => \$version,
+    'help|h'     => \$help,
+    'version|V'  => \$version,
     'verbose|v+' => \$verbose,
 ) or _usage(2);
 
@@ -77,17 +77,18 @@ _usage(0) if $cmd eq '';
 if ($cmd eq 'update') {
     my @hosts;
     my $config_path = $ENV{SDS_EASYDYN_CONFIG} // '';
+    my $state_path  = $ENV{SDS_EASYDYN_STATE}  // '';
     my $ip          = '';
     my $ip_url      = '';
     my $timeout     = 0;
     my $dry_run     = 0;
 
-    # Now parse update options from the remaining args only
     Getopt::Long::Configure(qw(no_ignore_case bundling));
     GetOptionsFromArray(
         \@argv,
         'host|H=s@'   => \@hosts,
         'config|c=s'  => \$config_path,
+        'state=s'     => \$state_path,
         'ip=s'        => \$ip,
         'ip-url=s'    => \$ip_url,
         'timeout=i'   => \$timeout,
@@ -95,7 +96,6 @@ if ($cmd eq 'update') {
         'verbose|v+'  => \$verbose,
     ) or _usage(2);
 
-    # If there are leftover args, treat as usage error (predictable CLI)
     if (@argv) {
         print STDERR "Unexpected arguments: @argv\n";
         _usage(2);
@@ -106,6 +106,7 @@ if ($cmd eq 'update') {
     my $res = $ddns->cmd_update(
         hosts       => \@hosts,
         config_path => $config_path,
+        state_path  => $state_path,
         ip          => $ip,
         ip_url      => $ip_url,
         timeout     => $timeout,
