@@ -52,7 +52,7 @@ USAGE
 }
 
 sub _version {
-    print "sdseasydyn 0.001\n";
+    print "sdseasydyn 0.1.0\n";
     exit 0;
 }
 

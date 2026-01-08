@@ -3,7 +3,7 @@ package EasyDNS::DDNS;
 use strict;
 use warnings;
 
-our $VERSION = '0.001';
+our $VERSION = '0.1.0';
 
 use URI::Escape qw(uri_escape);
 
@@ -36,8 +36,8 @@ sub cmd_update {
     );
     return $cfg if !$cfg->{ok};
 
-    my $r      = $cfg->{resolved};
-    my $token  = $cfg->{secrets}{token} // '';
+    my $r       = $cfg->{resolved};
+    my $token   = $cfg->{secrets}{token} // '';
     my $dry_run = $args{dry_run} ? 1 : 0;
 
     my $hosts = $r->{hosts} || [];
@@ -61,7 +61,6 @@ sub cmd_update {
         verbose => $self->{verbose},
     );
 
-    # Determine current IP (v1: IPv4)
     my $current_ip = $r->{ip};
     if (!$current_ip) {
         $current_ip = _fetch_public_ip($http, $r->{ip_url});
@@ -71,29 +70,27 @@ sub cmd_update {
           if $current_ip !~ /^(\d{1,3}\.){3}\d{1,3}$/;
     }
 
-    # Skip update if unchanged
     my $last_ip = $state->getLastIp;
     if ($last_ip && $last_ip eq $current_ip) {
         return {
-            ok        => 1,
-            exit_code => 0,
-            message   => "No change (IP unchanged)",
+            ok         => 1,
+            exit_code  => 0,
+            message    => "No change (IP unchanged)",
             current_ip => $current_ip,
-            resolved  => $r,
+            resolved   => $r,
         };
     }
 
     if ($dry_run) {
         return {
-            ok        => 1,
-            exit_code => 0,
-            message   => "Dry-run: would update",
+            ok         => 1,
+            exit_code  => 0,
+            message    => "Dry-run: would update",
             current_ip => $current_ip,
-            resolved  => $r,
+            resolved   => $r,
         };
     }
 
-    # Perform updates for each hostname
     for my $host (@$hosts) {
         my $u = _easydns_update_url($host, $current_ip);
 
@@ -108,7 +105,6 @@ sub cmd_update {
         }
     }
 
-    # Only store last IP if all updates succeeded
     $state->setLastIp($current_ip);
 
     return {
